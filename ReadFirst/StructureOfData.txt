@@ -1,8 +1,0 @@
-##Key Fields for Data Extraction
-Title: Found under citation-title.
-Abstract: Found under abstracts.
-Authors: Nested within bibrecord > head > author-group > author.
-Affiliation: Nested within each author in author-group > affiliation.
-Publication Date: Found under source > publicationdate.
-Keywords: Located in citation-info > author-keywords.
-Classification Codes: In enhancement > classificationgroup > classifications
