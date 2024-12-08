@@ -41,10 +41,10 @@ KEYWORD_DIR = os.path.join(BASE_DIR, "VisualizeData")  # Path for keywords data
 
 # File paths for publications and keywords
 pub_file_names = [
-    os.path.join(KAFKA_DIR, f"{year}.csv") for year in range(2018, 2024)
+    os.path.join(KAFKA_DIR, f"{year}.csv") for year in range(2015,2025)
 ]
 keyword_file_names = [
-    os.path.join(KEYWORD_DIR, f"{year}_keywords_counts.csv") for year in range(2018, 2024)
+    os.path.join(KEYWORD_DIR, f"{year}_keywords_counts.csv") for year in range(2015,2025)
 ]
 
 # Validate directories and file existence
@@ -188,6 +188,7 @@ if "📅 Publications Analysis" in selected_analyses:
             st.subheader("📊 Summary")
             st.write(f"- **Total Publications Analyzed**: {counts.sum()}")
             st.write(f"- **Highest Interval**: {counts.idxmax()} ({counts.max()} publications)")
+            
 # Keywords Analysis
 if "🏷️ Keywords Analysis" in selected_analyses:
     with st.sidebar:
@@ -280,19 +281,24 @@ if "🏷️ Keywords Analysis" in selected_analyses:
         st.plotly_chart(fig, use_container_width=True)
     else:
         st.warning("Please select at least one year.")
-
+        
 if "🔗 Co-authorship Network" in selected_analyses:
     with st.sidebar:
         st.subheader("🔗 Co-authorship Filters")
-        year = st.selectbox("Select Year", [str(y) for y in range(2018, 2024)])
+        year = st.selectbox("Select Year", [str(y) for y in range(2015,2025)])
         top_nodes = st.slider("Number of Top Authors to Display (Nodes):", min_value=5, max_value=30, value=10)
 
     st.subheader("Co-authorship Network")
     file_path = os.path.join(KAFKA_DIR, f"{year}.csv")
     if st.button("Generate Network"):
         try:
+            # Process the data to create the co-authorship network graph
             H = process_data(file_path, top_nodes)
+
+            # Position nodes using a layout
             pos = nx.spring_layout(H, seed=42)
+
+            # Create edge traces
             edge_trace = go.Scatter(
                 x=[],
                 y=[],
@@ -306,10 +312,11 @@ if "🔗 Co-authorship Network" in selected_analyses:
                 edge_trace['x'] += (x0, x1, None)
                 edge_trace['y'] += (y0, y1, None)
 
+            # Create node traces
             node_trace = go.Scatter(
                 x=[],
                 y=[],
-                mode='markers',
+                mode='markers+text',  # Enable markers and text
                 hoverinfo='text',
                 marker=dict(
                     showscale=True,
@@ -321,26 +328,36 @@ if "🔗 Co-authorship Network" in selected_analyses:
                         xanchor='left',
                         titleside='right'
                     )
-                )
+                ),
+                text=[],  # Initialize text attribute for node names
+                textposition="top center"  # Position text above the nodes
             )
             for node in H.nodes():
                 x, y = pos[node]
                 node_trace['x'] += (x,)
                 node_trace['y'] += (y,)
+                # Add node name (author) as text for display
+                node_trace['text'] += (str(node),)
 
-            fig = go.Figure(data=[edge_trace, node_trace],
-                            layout=go.Layout(
-                                showlegend=False,
-                                hovermode='closest',
-                                xaxis=dict(showgrid=False, zeroline=False),
-                                yaxis=dict(showgrid=False, zeroline=False),
-                                title=f"Co-authorship Network for {year}",
-                                title_x=0.5
-                            ))
+            # Create the figure
+            fig = go.Figure(
+                data=[edge_trace, node_trace],
+                layout=go.Layout(
+                    title=f"Co-authorship Network for {year}",
+                    title_x=0.5,
+                    showlegend=False,
+                    hovermode='closest',
+                    xaxis=dict(showgrid=False, zeroline=False),
+                    yaxis=dict(showgrid=False, zeroline=False)
+                )
+            )
 
+            # Render the plot in Streamlit
             st.plotly_chart(fig, use_container_width=True)
         except Exception as e:
             st.error(f"An error occurred while generating the network: {e}")
+
+
 # Ensure Publication_Date is parsed as datetime
 if 'Publication_Date' not in combined_pub_data.columns:
     st.error("'Publication_Date' column is missing in the data!")
@@ -404,8 +421,8 @@ if "🏫 Institution Analysis" in selected_analyses:
         st.subheader("🏫 Institution Filters")
         selected_years = st.multiselect(
             "Select Years",
-            options=[str(year) for year in range(2018, 2024)],
-            default=[str(year) for year in range(2018, 2024)],
+            options=[str(year) for year in range(2015,2025)],
+            default=[str(year) for year in range(2015,2025)],
             key="institution_years"
         )
         max_institutions = st.slider(
