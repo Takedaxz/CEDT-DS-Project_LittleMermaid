@@ -1,17 +1,20 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import os
 
-# Define the file path pattern
-file_path_pattern =  "/Users/ppaamm/Desktop/little mermaid_data/CEDT-DS-Project_LittleMermaid/Kafka/output_csv/{year}.csv"
+# Base directory setup relative to this script
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # Current directory of the script
+PROJECT_DIR = os.path.join(BASE_DIR, "..", "..")  # Adjust path to two levels above
+KAFKA_DIR = os.path.join(PROJECT_DIR, "Kafka", "output_csv")
 
-# Load and combine data for each year (2018-2024)
+# Load data for multiple years (2018-2024)
 dfs = []
-for year in range(2018, 2025):  # Adjusted range to include 2024
-    file_path = file_path_pattern.format(year=year)
+for year in range(2018, 2025):
+    file_path = os.path.join(KAFKA_DIR, f"{year}.csv")
     try:
         df = pd.read_csv(file_path)
-        df['Year'] = year  # Add year column to track the data
+        df['Year'] = year  # Add a Year column to track the data
         dfs.append(df)
     except FileNotFoundError:
         st.warning(f"File for year {year} not found.")
@@ -28,14 +31,14 @@ data = pd.concat(dfs, ignore_index=True)
 # Clean column names
 data.columns = data.columns.str.strip()
 
-# Display the raw data
+# Streamlit App Title
 st.title("Aggregation Type Analysis (2018-2024)")
-st.subheader("Raw Data")
-st.write(data)
 
 # Year Selection
-years = sorted(data['Year'].unique())  # Available years (now includes 2024)
-selected_years = st.multiselect("Select Year(s)", options=years, default=years)
+available_years = sorted(data['Year'].unique())
+selected_years = st.multiselect(
+    "Select Year(s) for Analysis", options=available_years, default=available_years
+)
 
 # Check if any years are selected
 if not selected_years:
@@ -45,12 +48,21 @@ if not selected_years:
 # Filter data based on selected years
 filtered_data = data[data['Year'].isin(selected_years)]
 
-# Group by Aggregation_Type and sum the counts across years
+# Group by Aggregation_Type and count occurrences
 aggregation_summary = filtered_data.groupby('Aggregation_Type').size().reset_index(name='Count')
 
-# Display aggregated data (sum of counts across selected years)
-st.subheader("Aggregated Data (Summed across years)")
-st.write(aggregation_summary)
+# Sorting Option
+st.subheader("Sorting Options")
+sort_order = st.radio(
+    "Sort Data By Count",
+    options=["Descending (High to Low)", "Ascending (Low to High)"],
+    index=0
+)
+
+# Apply sorting based on user's selection
+ascending = True if sort_order == "Ascending (Low to High)" else False
+aggregation_summary = aggregation_summary.sort_values(by="Count", ascending=ascending)
+
 
 # Visualization
 st.subheader("Visualization")
@@ -59,7 +71,7 @@ fig = px.bar(
     x="Aggregation_Type",
     y="Count",
     color="Aggregation_Type",
-    title="Count of Aggregation Type Summed Across Selected Years (2018-2024)",
+    title=f"Count of Aggregation Type for Selected Years: {', '.join(map(str, selected_years))}",
     labels={"Count": "Total Frequency", "Aggregation_Type": "Type"}
 )
 

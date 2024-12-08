@@ -6,7 +6,6 @@ import plotly.express as px
 from collections import defaultdict
 import networkx as nx
 
-
 # Base directory setup relative to this script
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # Current directory of the script
 PROJECT_DIR = os.path.join(BASE_DIR, "..", "..")  # Adjust path to two levels above
@@ -91,7 +90,7 @@ combined_keyword_data = pd.concat(keyword_dataframes)
 # Multiselect for analysis
 selected_analyses = st.multiselect(
     "Select Analyses to Perform",
-    ["📅 Publications Analysis", "🏷️ Keywords Analysis", "🔗 Co-authorship Network", "🏫 Institution Analysis"],
+    ["📅 Publications Analysis", "🏷️ Keywords Analysis", "🔗 Co-authorship Network", "🏫 Institution Analysis", "📑 Research Type Analysis"],
     default=["📅 Publications Analysis"]
 )
 
@@ -102,28 +101,42 @@ if "📅 Publications Analysis" in selected_analyses:
         chart_type = st.radio("Select Chart Type", ["Bar Chart", "Line Chart", "Pie Chart"], key="pub_chart")
 
     st.subheader("Publications Analysis")
-    if interval == "Yearly":
-        combined_pub_data['Year'] = combined_pub_data['Publication_Date'].dt.year
-        counts = combined_pub_data['Year'].value_counts().sort_index()
-    elif interval == "Quarterly":
-        combined_pub_data['Quarter'] = combined_pub_data['Publication_Date'].dt.to_period('Q')
-        counts = combined_pub_data['Quarter'].value_counts().sort_index()
-    elif interval == "Monthly":
-        combined_pub_data['Month_Year'] = combined_pub_data['Publication_Date'].dt.to_period('M')
-        counts = combined_pub_data['Month_Year'].value_counts().sort_index()
+    
+    if 'Publication_Date' not in combined_pub_data.columns:
+        st.error("'Publication_Date' column is missing in the data!")
+    else:
+        combined_pub_data['Publication_Date'] = pd.to_datetime(combined_pub_data['Publication_Date'], errors='coerce')
+        
+        # Check for invalid dates and drop them
+        invalid_dates = combined_pub_data['Publication_Date'].isnull().sum()
+        if invalid_dates > 0:
+            st.warning(f"Found {invalid_dates} invalid dates, they will be excluded.")
+        
+        if interval == "Yearly":
+            combined_pub_data['Year'] = combined_pub_data['Publication_Date'].dt.year
+            counts = combined_pub_data['Year'].value_counts().sort_index()
+        elif interval == "Quarterly":
+            combined_pub_data['Quarter'] = combined_pub_data['Publication_Date'].dt.to_period('Q')
+            counts = combined_pub_data['Quarter'].value_counts().sort_index()
+        elif interval == "Monthly":
+            combined_pub_data['Month_Year'] = combined_pub_data['Publication_Date'].dt.to_period('M')
+            counts = combined_pub_data['Month_Year'].value_counts().sort_index()
 
-    if chart_type == "Bar Chart":
-        fig = px.bar(counts, x=counts.index.astype(str), y=counts, labels={'x': interval, 'y': 'Number of Publications'}, title=f"Publications by {interval}")
-    elif chart_type == "Line Chart":
-        fig = px.line(counts, x=counts.index.astype(str), y=counts, labels={'x': interval, 'y': 'Number of Publications'}, title=f"Publications by {interval}")
-    elif chart_type == "Pie Chart":
-        fig = px.pie(counts, names=counts.index.astype(str), values=counts, title=f"Publications by {interval}")
-    st.plotly_chart(fig, use_container_width=True)
+        if counts.empty:
+            st.warning("No data available for this selection.")
+        else:
+            if chart_type == "Bar Chart":
+                fig = px.bar(counts, x=counts.index.astype(str), y=counts, labels={'x': interval, 'y': 'Number of Publications'}, title=f"Publications by {interval}")
+            elif chart_type == "Line Chart":
+                fig = px.line(counts, x=counts.index.astype(str), y=counts, labels={'x': interval, 'y': 'Number of Publications'}, title=f"Publications by {interval}")
+            elif chart_type == "Pie Chart":
+                fig = px.pie(counts, names=counts.index.astype(str), values=counts, title=f"Publications by {interval}")
+            st.plotly_chart(fig, use_container_width=True)
 
-    # Summary for Publications
-    st.subheader("📊 Summary")
-    st.write(f"- **Total Publications Analyzed**: {counts.sum()}")
-    st.write(f"- **Highest Interval**: {counts.idxmax()} ({counts.max()} publications)")
+            # Summary for Publications
+            st.subheader("📊 Summary")
+            st.write(f"- **Total Publications Analyzed**: {counts.sum()}")
+            st.write(f"- **Highest Interval**: {counts.idxmax()} ({counts.max()} publications)")
 
 if "🏷️ Keywords Analysis" in selected_analyses:
     with st.sidebar:
@@ -177,130 +190,110 @@ if "🔗 Co-authorship Network" in selected_analyses:
     if st.button("Generate Network"):
         try:
             H = process_data(file_path, top_nodes)
-            pos = nx.spring_layout(H, k=1, iterations=100)
-
-            edge_x, edge_y = [], []
-            for edge in H.edges(data=True):
+            pos = nx.spring_layout(H, seed=42)
+            edge_trace = go.Scatter(
+                x=[],
+                y=[],
+                line=dict(width=0.5, color='#888'),
+                hoverinfo='none',
+                mode='lines'
+            )
+            for edge in H.edges():
                 x0, y0 = pos[edge[0]]
                 x1, y1 = pos[edge[1]]
-                edge_x.extend([x0, x1, None])
-                edge_y.extend([y0, y1, None])
+                edge_trace['x'] += (x0, x1, None)
+                edge_trace['y'] += (y0, y1, None)
 
-            node_x, node_y, node_labels = [], [], []
+            node_trace = go.Scatter(
+                x=[],
+                y=[],
+                mode='markers',
+                hoverinfo='text',
+                marker=dict(
+                    showscale=True,
+                    colorscale='YlGnBu',
+                    size=10,
+                    colorbar=dict(
+                        thickness=15,
+                        title='Node Connections',
+                        xanchor='left',
+                        titleside='right'
+                    )
+                )
+            )
             for node in H.nodes():
                 x, y = pos[node]
-                node_x.append(x)
-                node_y.append(y)
-                node_labels.append(node)
+                node_trace['x'] += (x,)
+                node_trace['y'] += (y,)
 
-            fig = go.Figure()
+            fig = go.Figure(data=[edge_trace, node_trace],
+                            layout=go.Layout(
+                                showlegend=False,
+                                hovermode='closest',
+                                xaxis=dict(showgrid=False, zeroline=False),
+                                yaxis=dict(showgrid=False, zeroline=False),
+                                title=f"Co-authorship Network for {year}",
+                                title_x=0.5
+                            ))
 
-            fig.add_trace(go.Scatter(
-                x=edge_x,
-                y=edge_y,
-                mode='lines',
-                line=dict(color='gray', width=0.5),
-                hoverinfo='none'
-            ))
-
-            fig.add_trace(go.Scatter(
-                x=node_x,
-                y=node_y,
-                mode='markers+text',
-                marker=dict(size=10, color='lightblue', line_width=1),
-                text=node_labels,
-                textposition="top center",
-                hoverinfo='text'
-            ))
-
-            fig.update_layout(
-                title=f"Co-authorship Network for {year} (Top {top_nodes} Authors)",
-                showlegend=False,
-                xaxis=dict(showgrid=False, zeroline=False),
-                yaxis=dict(showgrid=False, zeroline=False),
-                height=800,
-                width=800,
-            )
-
-            st.plotly_chart(fig)
-
+            st.plotly_chart(fig, use_container_width=True)
         except Exception as e:
-            st.error(f"Error: {e}")
-if "🏫 Institution Analysis" in selected_analyses:
+            st.error(f"An error occurred while generating the network: {e}")
+# Ensure Publication_Date is parsed as datetime
+if 'Publication_Date' not in combined_pub_data.columns:
+    st.error("'Publication_Date' column is missing in the data!")
+else:
+    combined_pub_data['Publication_Date'] = pd.to_datetime(combined_pub_data['Publication_Date'], errors='coerce')
+
+    # Check for invalid dates and drop them
+    invalid_dates = combined_pub_data['Publication_Date'].isnull().sum()
+    if invalid_dates > 0:
+        st.warning(f"Found {invalid_dates} invalid dates, they will be excluded.")
+
+    # Ensure 'Year' column is generated
+    combined_pub_data['Year'] = combined_pub_data['Publication_Date'].dt.year
+
+# Now you can use the 'Year' column in the multiselect
+if "📑 Research Type Analysis" in selected_analyses:
     with st.sidebar:
-        st.subheader("🏫 Institution Filters")
+        st.subheader("📑 Research Type Filters")
         selected_years = st.multiselect(
-            "Select Years",
-            options=[str(year) for year in range(2018, 2024)],
-            default=[str(year) for year in range(2018, 2024)],
-            key="institution_years"
+            "Select Years", 
+            options=combined_pub_data['Year'].unique(), 
+            default=combined_pub_data['Year'].unique()
         )
-        max_institutions = st.slider(
-            "Select number of institutions to display:",
-            min_value=1,
-            max_value=500,
-            value=10
-        )
-        sort_order = st.radio(
-            "Sort Order",
-            options=["Descending (High to Low)", "Ascending (Low to High)"],
-            index=0,
-            key="institution_sort_order"
-        )
+        chart_type = st.radio("Select Chart Type", ["Bar Chart", "Pie Chart"], key="research_type_chart")
 
-    st.subheader("Institution Analysis")
-    all_data = []
+    st.subheader("Research Type Analysis")
+    if selected_years:
+        filtered_data = combined_pub_data[combined_pub_data['Year'].isin(selected_years)]
+        if 'Aggregation_Type' in filtered_data.columns:
+            aggregated_data = filtered_data.groupby('Aggregation_Type').size().reset_index(name='Count')
+            aggregated_data = aggregated_data.sort_values('Count', ascending=False)
 
-    for year in selected_years:
-        file_path = os.path.join(KAFKA_DIR, f"{year}.csv")
-        if not os.path.exists(file_path):
-            st.warning(f"File not found for {year}! Skipping...")
-            continue
-        df = pd.read_csv(file_path)
-        all_data.append(df)
-
-    if all_data:
-        combined_df = pd.concat(all_data, ignore_index=True)
-        institution_column = 'Institutions'
-
-        if institution_column in combined_df.columns:
-            df_cleaned = combined_df[institution_column].dropna()
-            institutions_split = df_cleaned.str.split(';')
-            all_institutions = [institution.strip() for sublist in institutions_split for institution in set(sublist)]
-            publication_counts = pd.Series(all_institutions).value_counts()
-
-            # Adjust sorting order
-            if sort_order == "Descending (High to Low)":
-                publication_counts = publication_counts.sort_values(ascending=False)
-            else:
-                publication_counts = publication_counts.sort_values(ascending=True)
-
-            top_publications = publication_counts.head(max_institutions)
-
-            fig = go.Figure(data=[go.Bar(
-                x=top_publications.index,
-                y=top_publications.values,
-                text=top_publications.values,
-                textposition='auto',
-                marker_color='skyblue'
-            )])
-
-            fig.update_layout(
-                title=f"Top {max_institutions} Publication Counts per Institution ({', '.join(selected_years)})",
-                xaxis_title="Institution",
-                yaxis_title="Publication Count",
-                template="plotly_white"
-            )
+            if chart_type == "Bar Chart":
+                fig = px.bar(
+                    aggregated_data, 
+                    x='Aggregation_Type', 
+                    y='Count', 
+                    title="Research Type Analysis",
+                    labels={'Aggregation_Type': 'Research Type', 'Count': 'Total Count'}
+                )
+            elif chart_type == "Pie Chart":
+                fig = px.pie(
+                    aggregated_data, 
+                    names='Aggregation_Type', 
+                    values='Count', 
+                    title="Research Type Analysis"
+                )
 
             st.plotly_chart(fig, use_container_width=True)
 
-            # Summary for Institutions
+            # Summary for Research Types
             st.subheader("📊 Summary")
-            top_institution = top_publications.idxmax() if sort_order == "Descending (High to Low)" else top_publications.idxmin()
-            top_count = top_publications.max() if sort_order == "Descending (High to Low)" else top_publications.min()
-            st.write(f"- **Top Institution**: {top_institution} ({top_count} publications)")
-            st.write(f"- **Total Institutions Analyzed**: {len(publication_counts)}")
+            st.write(f"- **Total Research Types Analyzed**: {len(aggregated_data)}")
+            st.write(f"- **Most Common Research Type**: {aggregated_data.iloc[0]['Aggregation_Type']} ({aggregated_data.iloc[0]['Count']} occurrences)")
         else:
-            st.error(f"Column '{institution_column}' not found in the combined dataset.")
+            st.error("The 'Aggregation_Type' column is missing in the data.")
     else:
-        st.error("No valid data files found for the selected years.")
+        st.warning("Please select at least one year.")
