@@ -504,7 +504,7 @@ if "🏫 Institution Analysis" in selected_analyses:
         
 # Top 10 Recommended Titles Finder
 if "📚 Top 10 Recommended Titles Finder" in selected_analyses:
-    st.title("Top 10 Recommended Titles Finder")
+    st.subheader("Top 10 Recommended Titles Finder")
 
     # Load year selection for publications data
     with st.sidebar:
@@ -516,8 +516,8 @@ if "📚 Top 10 Recommended Titles Finder" in selected_analyses:
                 key="institution_year"
         )
         
-    df = load_data(year)
-    st.write(f"Data Loaded for the Year: {year}")
+    df = load_data(selected_year)
+    st.write(f"Data Loaded for the Year: {selected_year}")
 
     vectorizer, combined_vectors = vectorize_data(df)
 
