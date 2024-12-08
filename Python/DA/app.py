@@ -38,6 +38,12 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # Current directory of th
 PROJECT_DIR = os.path.join(BASE_DIR, "..", "..")  # Adjust path to two levels above
 KAFKA_DIR = os.path.join(PROJECT_DIR, "Kafka", "output_csv")  # Path for publications
 KEYWORD_DIR = os.path.join(BASE_DIR, "VisualizeData")  # Path for keywords data
+topic_keyword_file_names = [
+    os.path.join(KEYWORD_DIR, f"{year}_Topic_count.csv") for year in range(2015, 2025)
+]
+topic_file_names = [
+    os.path.join(KEYWORD_DIR, f"{year}_Topic.csv") for year in range(2015, 2025)
+]
 
 # File paths for publications and keywords
 pub_file_names = [
@@ -147,7 +153,8 @@ selected_analyses = st.multiselect(
      "🏫 Institution Analysis",
      "📑 Research Type Analysis",
      "📚 Top 10 Recommended Titles Finder",
-     "📈 Predict Trend"],
+     "📈 Predict Trend",
+     "📊 Topics Analysis"],
     default=["📅 Publications Analysis"]
 )
 
@@ -631,3 +638,117 @@ if "📈 Predict Trend" in selected_analyses:
         
         # Show the chart in column 2
         st.plotly_chart(fig)
+
+# Load topics data for visualization
+topics_dataframes = []
+
+for file_path in topic_keyword_file_names:
+    if os.path.exists(file_path):
+        df = pd.read_csv(file_path)
+        df = df.rename(columns={"Year": "Year", "topic_label": "Topic", "value_count": "Count"})
+        df = df.loc[:, ~df.columns.str.contains('^Unnamed')]  # Drop unnamed columns
+        topics_dataframes.append(df[['Topic', 'Count', 'Year']])
+
+# Combine all topic dataframes for visualization
+combined_topics_data = pd.concat(topics_dataframes, ignore_index=True)
+
+# Load topic files for table display
+topic_dataframes = []
+
+for file_path in topic_file_names:
+    if os.path.exists(file_path):
+        df = pd.read_csv(file_path)
+        df = df.loc[:, ~df.columns.str.contains('^Unnamed')]  # Drop unnamed columns
+        df['Year'] = int(os.path.basename(file_path).split('_')[0])  # Extract year from file name
+        topic_dataframes.append(df)
+
+# Combine all topic dataframes for table display
+combined_topic_data = pd.concat(topic_dataframes, ignore_index=True)
+# Topics Analysis
+if "📊 Topics Analysis" in selected_analyses:
+    # Move the year selection and chart type selection to the sidebar
+    st.sidebar.subheader("📊 Topics Filters")
+    selected_years_topics = st.sidebar.selectbox(
+        "Select Year", 
+        options=combined_topics_data['Year'].unique(), 
+        index=0  # Set default to the first year
+    )
+    chart_type_topics = st.sidebar.radio(
+        "Select Chart Type", 
+        ["Bar Chart", "Scatter Chart", "Pie Chart"], 
+        key="topics_chart"
+    )
+
+    st.subheader("Topics Analysis")
+    
+    if selected_years_topics:
+        # Filter the data based on the selected year
+        filtered_topics = combined_topics_data[combined_topics_data['Year'] == selected_years_topics]
+
+        # Create a DataFrame for Top 5 Topics for the selected year
+        top5_topics = filtered_topics.groupby(['Year', 'Topic']).sum().reset_index()
+        top5_topics = top5_topics.sort_values(['Year', 'Count'], ascending=[True, False]).head(5)
+
+        # Summary for Topics
+        st.subheader("📊 Summary")
+
+        # Find the most frequent topic in the selected year
+        overall_top_topics = filtered_topics.groupby('Topic')['Count'].sum().reset_index()
+        overall_top_topics = overall_top_topics.sort_values(by='Count', ascending=False).head(1)
+
+        total_topics = len(filtered_topics['Topic'].unique())
+        top_topic = overall_top_topics['Topic'].values[0] if not overall_top_topics.empty else "N/A"
+        top_topic_count = overall_top_topics['Count'].values[0] if not overall_top_topics.empty else 0
+
+        st.write(f"- **Top Topic**: {top_topic} ({top_topic_count} mentions)")
+
+        # Create the chart based on selected chart type
+        if chart_type_topics == "Bar Chart":
+            fig = px.bar(
+                top5_topics, 
+                x='Topic', 
+                y='Count', 
+                color='Year',
+                title="Top 5 Topics in Year " + str(selected_years_topics),
+                labels={'Topic': 'Topic', 'Count': 'Total Count'},
+                text='Count',
+                barmode='group'
+            )
+        elif chart_type_topics == "Scatter Chart":
+            fig = px.scatter(
+                top5_topics,
+                x='Topic',
+                y='Count',
+                color='Year',
+                title="Top 5 Topics Count in Year " + str(selected_years_topics),
+                labels={'Topic': 'Topic', 'Count': 'Total Count'},
+                size='Count',
+                size_max=20,
+                hover_name='Topic'
+            )
+        elif chart_type_topics == "Pie Chart":
+            pie_data = top5_topics.nlargest(5, 'Count')
+
+            fig = px.pie(
+                pie_data, 
+                names='Topic', 
+                values='Count', 
+                title=f"Top 5 Topics in {selected_years_topics}"
+            )
+
+        st.plotly_chart(fig, use_container_width=True)
+
+        # Ensure the table is ordered the same as the graph (Top 5 Topics based on 'Count')
+        st.subheader(f"Top 5 Topics Table: {selected_years_topics}")
+        filtered_topic_details = combined_topic_data[
+            (combined_topic_data['Year'] == selected_years_topics) & 
+            (combined_topic_data['Topic'].isin(top5_topics['Topic']))
+        ]
+        
+        # Sort the filtered table in the same order as the top5_topics
+        filtered_topic_details = filtered_topic_details.set_index('Topic')
+        filtered_topic_details = filtered_topic_details.loc[top5_topics['Topic']].reset_index()
+
+        st.dataframe(filtered_topic_details)
+    else:
+        st.warning("Please select a year.")
