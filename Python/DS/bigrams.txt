@@ -57,6 +57,7 @@ real time_data real_time_data
 data storage data_storage
 data preprocessing data_preprocessing
 data analytics data_analytics
+data analysis data_analysis
 numerical simulations numerical_simulations
 scientific computing scientific_computing
 computational model computational_model
@@ -84,9 +85,14 @@ smart sensors smart_sensors
 digital twin digital_twin
 industrial internet industrial_internet
 industrial automation industrial_automation
+industrial engineering industrial_engineering
 system integration system_integration
 maintenance strategy maintenance_strategy
 operational efficiency operational_efficiency
 asset management asset_management
 remote monitoring remote_monitoring
 predictive analytics predictive_analytics
+energy efficiency energy_efficiency
+global scale global_scale
+advanced technologies advanced_technologies
+
