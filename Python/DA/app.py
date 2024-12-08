@@ -5,8 +5,7 @@ import plotly.graph_objects as go
 import plotly.express as px
 from collections import defaultdict
 import networkx as nx
-from wordcloud import WordCloud
-import matplotlib.pyplot as plt
+
 
 # Base directory setup relative to this script
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # Current directory of the script
@@ -43,7 +42,7 @@ st.set_page_config(
 # Title and description
 st.title("📚 Research Analysis Dashboard")
 st.markdown("""
-Explore **Co-authorship Networks**, **Research Publications**, **Top Keywords**, and **Institution Analysis** in one unified dashboard. 
+Explore **Co-authorship Networks**, **Research Publications**, and **Top Keywords** in one unified dashboard. 
 Choose intervals, years, and chart types to visualize trends effectively.
 """)
 
@@ -96,7 +95,6 @@ selected_analyses = st.multiselect(
     default=["📅 Publications Analysis"]
 )
 
-# Publications Analysis
 if "📅 Publications Analysis" in selected_analyses:
     with st.sidebar:
         st.subheader("📅 Publications Filters")
@@ -127,7 +125,6 @@ if "📅 Publications Analysis" in selected_analyses:
     st.write(f"- **Total Publications Analyzed**: {counts.sum()}")
     st.write(f"- **Highest Interval**: {counts.idxmax()} ({counts.max()} publications)")
 
-# Keywords Analysis
 if "🏷️ Keywords Analysis" in selected_analyses:
     with st.sidebar:
         st.subheader("🏷️ Keywords Filters")
@@ -137,7 +134,6 @@ if "🏷️ Keywords Analysis" in selected_analyses:
             default=combined_keyword_data['Year'].unique()
         )
         chart_type = st.radio("Select Chart Type", ["Bar Chart", "Pie Chart"], key="keyword_chart")
-        show_wordcloud = st.checkbox("Display WordCloud", value=True)
 
     st.subheader("Keywords Analysis")
     if selected_years:
@@ -160,19 +156,8 @@ if "🏷️ Keywords Analysis" in selected_analyses:
                 values='Count', 
                 title="Top Keywords"
             )
-        st.plotly_chart(fig, use_container_width=True)
 
-        if show_wordcloud:
-            st.subheader("WordCloud of Keywords")
-            keyword_freq = dict(zip(filtered_keywords['Keywords'], filtered_keywords['Count']))
-            wordcloud = WordCloud(
-                width=800, height=400, background_color="white", colormap="viridis"
-            ).generate_from_frequencies(keyword_freq)
-            
-            fig, ax = plt.subplots(figsize=(10, 5))
-            ax.imshow(wordcloud, interpolation='bilinear')
-            ax.axis("off")
-            st.pyplot(fig)
+        st.plotly_chart(fig, use_container_width=True)
 
         # Summary for Keywords
         st.subheader("📊 Summary")
@@ -180,7 +165,7 @@ if "🏷️ Keywords Analysis" in selected_analyses:
         st.write(f"- **Top Keyword**: {aggregated_keywords.iloc[0]['Keywords']} ({aggregated_keywords.iloc[0]['Count']} mentions)")
     else:
         st.warning("Please select at least one year.")
-# Co-authorship Network
+
 if "🔗 Co-authorship Network" in selected_analyses:
     with st.sidebar:
         st.subheader("🔗 Co-authorship Filters")
@@ -188,59 +173,134 @@ if "🔗 Co-authorship Network" in selected_analyses:
         top_nodes = st.slider("Number of Top Authors to Display (Nodes):", min_value=5, max_value=30, value=10)
 
     st.subheader("Co-authorship Network")
-    
-    # Dynamically construct file path
     file_path = os.path.join(KAFKA_DIR, f"{year}.csv")
-    
     if st.button("Generate Network"):
-        if os.path.exists(file_path):  # Check if the file exists
-            try:
-                H = process_data(file_path, top_nodes)
-                pos = nx.spring_layout(H, k=1, iterations=100)
+        try:
+            H = process_data(file_path, top_nodes)
+            pos = nx.spring_layout(H, k=1, iterations=100)
 
-                edge_x, edge_y = [], []
-                for edge in H.edges(data=True):
-                    x0, y0 = pos[edge[0]]
-                    x1, y1 = pos[edge[1]]
-                    edge_x.extend([x0, x1, None])
-                    edge_y.extend([y0, y1, None])
+            edge_x, edge_y = [], []
+            for edge in H.edges(data=True):
+                x0, y0 = pos[edge[0]]
+                x1, y1 = pos[edge[1]]
+                edge_x.extend([x0, x1, None])
+                edge_y.extend([y0, y1, None])
 
-                node_x, node_y, node_labels = [], [], []
-                for node in H.nodes():
-                    x, y = pos[node]
-                    node_x.append(x)
-                    node_y.append(y)
-                    node_labels.append(node)
+            node_x, node_y, node_labels = [], [], []
+            for node in H.nodes():
+                x, y = pos[node]
+                node_x.append(x)
+                node_y.append(y)
+                node_labels.append(node)
 
-                fig = go.Figure()
+            fig = go.Figure()
 
-                fig.add_trace(go.Scatter(
-                    x=edge_x,
-                    y=edge_y,
-                    mode='lines',
-                    line=dict(color='gray', width=0.5),
-                    hoverinfo='none'
-                ))
+            fig.add_trace(go.Scatter(
+                x=edge_x,
+                y=edge_y,
+                mode='lines',
+                line=dict(color='gray', width=0.5),
+                hoverinfo='none'
+            ))
 
-                fig.add_trace(go.Scatter(
-                    x=node_x,
-                    y=node_y,
-                    mode='markers+text',
-                    marker=dict(size=10, color='lightblue', line_width=1),
-                    text=node_labels,
-                    textposition="top center",
-                    hoverinfo='text'
-                ))
+            fig.add_trace(go.Scatter(
+                x=node_x,
+                y=node_y,
+                mode='markers+text',
+                marker=dict(size=10, color='lightblue', line_width=1),
+                text=node_labels,
+                textposition="top center",
+                hoverinfo='text'
+            ))
 
-                fig.update_layout(
-                    title=f"Co-authorship Network for {year}",
-                    title_x=0.5,
-                    showlegend=False,
-                    xaxis=dict(showgrid=False, zeroline=False),
-                    yaxis=dict(showgrid=False, zeroline=False)
-                )
-                st.plotly_chart(fig)
-            except Exception as e:
-                st.error(f"Error generating network: {e}")
+            fig.update_layout(
+                title=f"Co-authorship Network for {year} (Top {top_nodes} Authors)",
+                showlegend=False,
+                xaxis=dict(showgrid=False, zeroline=False),
+                yaxis=dict(showgrid=False, zeroline=False),
+                height=800,
+                width=800,
+            )
+
+            st.plotly_chart(fig)
+
+        except Exception as e:
+            st.error(f"Error: {e}")
+if "🏫 Institution Analysis" in selected_analyses:
+    with st.sidebar:
+        st.subheader("🏫 Institution Filters")
+        selected_years = st.multiselect(
+            "Select Years",
+            options=[str(year) for year in range(2018, 2024)],
+            default=[str(year) for year in range(2018, 2024)],
+            key="institution_years"
+        )
+        max_institutions = st.slider(
+            "Select number of institutions to display:",
+            min_value=1,
+            max_value=500,
+            value=10
+        )
+        sort_order = st.radio(
+            "Sort Order",
+            options=["Descending (High to Low)", "Ascending (Low to High)"],
+            index=0,
+            key="institution_sort_order"
+        )
+
+    st.subheader("Institution Analysis")
+    all_data = []
+
+    for year in selected_years:
+        file_path = os.path.join(KAFKA_DIR, f"{year}.csv")
+        if not os.path.exists(file_path):
+            st.warning(f"File not found for {year}! Skipping...")
+            continue
+        df = pd.read_csv(file_path)
+        all_data.append(df)
+
+    if all_data:
+        combined_df = pd.concat(all_data, ignore_index=True)
+        institution_column = 'Institutions'
+
+        if institution_column in combined_df.columns:
+            df_cleaned = combined_df[institution_column].dropna()
+            institutions_split = df_cleaned.str.split(';')
+            all_institutions = [institution.strip() for sublist in institutions_split for institution in set(sublist)]
+            publication_counts = pd.Series(all_institutions).value_counts()
+
+            # Adjust sorting order
+            if sort_order == "Descending (High to Low)":
+                publication_counts = publication_counts.sort_values(ascending=False)
+            else:
+                publication_counts = publication_counts.sort_values(ascending=True)
+
+            top_publications = publication_counts.head(max_institutions)
+
+            fig = go.Figure(data=[go.Bar(
+                x=top_publications.index,
+                y=top_publications.values,
+                text=top_publications.values,
+                textposition='auto',
+                marker_color='skyblue'
+            )])
+
+            fig.update_layout(
+                title=f"Top {max_institutions} Publication Counts per Institution ({', '.join(selected_years)})",
+                xaxis_title="Institution",
+                yaxis_title="Publication Count",
+                template="plotly_white"
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+
+            # Summary for Institutions
+            st.subheader("📊 Summary")
+            top_institution = top_publications.idxmax() if sort_order == "Descending (High to Low)" else top_publications.idxmin()
+            top_count = top_publications.max() if sort_order == "Descending (High to Low)" else top_publications.min()
+            st.write(f"- **Top Institution**: {top_institution} ({top_count} publications)")
+            st.write(f"- **Total Institutions Analyzed**: {len(publication_counts)}")
         else:
-            st.error(f"File not found: {file_path}. Please ensure the file exists.")
+            st.error(f"Column '{institution_column}' not found in the combined dataset.")
+    else:
+        st.error("No valid data files found for the selected years.")

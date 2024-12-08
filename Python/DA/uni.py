@@ -4,7 +4,7 @@ import streamlit as st
 import plotly.graph_objects as go
 
 # Load CSV file
-file_path = '/Users/ppaamm/Desktop/little mermaid_data/CEDT-DS-Project_LittleMermaid/ExtractedData/2018.csv'
+file_path = '/Users/ppaamm/Desktop/little mermaid_data/CEDT-DS-Project_LittleMermaid/Kafka/output_csv/2018.csv'
 
 
 # Check if the file exists
