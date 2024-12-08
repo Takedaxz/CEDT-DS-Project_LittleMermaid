@@ -92,7 +92,7 @@ st.set_page_config(
 # Title and description
 st.title("📚 Research Analysis Dashboard")
 st.markdown("""
-Explore **Co-authorship Networks**, **Research Publications**, and **Top Keywords** in one unified dashboard. 
+Explore **Co-authorship Networks**, **Research Publications**, and **Top Keywords** and others in one unified dashboard. 
 Choose intervals, years, and chart types to visualize trends effectively.
 """)
 
@@ -141,7 +141,13 @@ combined_keyword_data = pd.concat(keyword_dataframes)
 # Multiselect for analysis
 selected_analyses = st.multiselect(
     "Select Analyses to Perform",
-    ["📅 Publications Analysis", "🏷️ Keywords Analysis", "🔗 Co-authorship Network", "🏫 Institution Analysis", "📑 Research Type Analysis", "📚 Top 10 Recommended Titles Finder"],
+    ["📅 Publications Analysis",
+     "🏷️ Keywords Analysis",
+     "🔗 Co-authorship Network",
+     "🏫 Institution Analysis",
+     "📑 Research Type Analysis",
+     "📚 Top 10 Recommended Titles Finder",
+     "📈 Predict Trend"],
     default=["📅 Publications Analysis"]
 )
 
@@ -416,6 +422,7 @@ if "📑 Research Type Analysis" in selected_analyses:
             st.error("The 'Aggregation_Type' column is missing in the data.")
     else:
         st.warning("Please select at least one year.")
+        
 if "🏫 Institution Analysis" in selected_analyses:
     with st.sidebar:
         st.subheader("🏫 Institution Filters")
@@ -500,7 +507,15 @@ if "📚 Top 10 Recommended Titles Finder" in selected_analyses:
     st.title("Top 10 Recommended Titles Finder")
 
     # Load year selection for publications data
-    year = st.sidebar.selectbox("Select Year", ['2018', '2019', '2020','2021','2022','2023'], index=0)
+    with st.sidebar:
+            st.subheader("📚 Top 10 Recommended Titles Finder")
+            selected_year = st.selectbox(
+                "Select Year for Prediction",
+                options=[str(year) for year in range(2015, 2025)],
+                index=0,  # Default selection (2024)
+                key="institution_year"
+        )
+        
     df = load_data(year)
     st.write(f"Data Loaded for the Year: {year}")
 
@@ -524,4 +539,95 @@ if "📚 Top 10 Recommended Titles Finder" in selected_analyses:
             for idx, title in enumerate(recommended_titles, start=1):
                 st.write(f"{idx}. {title}")
         else:
+
             st.warning("Please enter some text to find recommendations.")
+ 
+# # Correct file path for predict_data.csv based on the project structure
+file_path = os.path.join(KEYWORD_DIR, "predict_data.csv")
+combined_pub_data = pd.read_csv(file_path)
+
+# Define a simple trend prediction function by quarter
+def predict_trend(data, year, quarter):
+    """
+    Predicts the trend for a given year and quarter.
+    Assuming simple linear growth for each quarter with a fixed percentage increase.
+    """
+    # Get the actual percentage for the given year and quarter
+    recent_data = data[(data['Year'] == year) & (data['Quarter'] == quarter)]
+    if not recent_data.empty:
+        recent_percentage = recent_data['Percentage'].values[0]
+        predicted_percentage = recent_percentage * 1.05  # Example: 5% increase for the prediction
+        return predicted_percentage
+    else:
+        return 0  # Return 0 if no data is found for that quarter
+
+
+# Assuming 'selected_analyses' and Streamlit integration is already set up.
+if "📈 Predict Trend" in selected_analyses:
+    
+    with st.sidebar:
+        st.subheader("📈 Predict Trend")
+        selected_year = st.selectbox(
+            "Select Year for Prediction",
+            options=[str(year) for year in range(2025, 2027)],
+            index=0,  # Default selection (2024)
+            key="institution_year"
+        )
+
+    # Convert selected_year to an integer
+    selected_year_int = int(selected_year)
+
+    # Show predicted trend for selected year
+    if selected_year_int:
+        st.write(f"Predicted Trends for Year {selected_year_int}:")
+
+        for quarter in ['Q1', 'Q2', 'Q3', 'Q4']:  # Iterate over all quarters
+            predicted_percentage = predict_trend(combined_pub_data, selected_year_int - 1, quarter)  # Predict based on previous year's data
+            st.write(f"{quarter}: {predicted_percentage:.2f}%")  # Display predicted percentage for each quarter
+
+    
+    # Create two columns for side-by-side layout
+    col1, col2 = st.columns([1, 2])  # Adjust the ratio as needed (e.g., [1, 2])
+    
+    # In column 1 (col1), show the table
+    with col1:
+        st.write("### Data Table")
+        st.write(combined_pub_data)
+    
+    # In column 2 (col2), show the graph
+    with col2:
+        # Create the plotly figure
+        fig = go.Figure()
+        
+        # Ensure the data is sorted by Year and Quarter for proper plotting
+        combined_pub_data_sorted = combined_pub_data.sort_values(by=['Year', 'Quarter'])
+        
+        # Plot the actual data (only for years up to 2024)
+        actual_data_up_to_2024 = combined_pub_data_sorted[combined_pub_data_sorted['Year'] <= 2024]
+        
+        for quarter in ['Q1', 'Q2', 'Q3', 'Q4']:  # Iterate over all quarters
+            quarter_data = actual_data_up_to_2024[actual_data_up_to_2024['Quarter'] == quarter]
+            fig.add_trace(go.Scatter(x=quarter_data['Year'], 
+                                     y=quarter_data['Percentage'], 
+                                     mode='lines+markers', 
+                                     name=f'Actual Data {quarter}'))
+        
+        # Plot the predicted trend for each quarter (from 2024 to 2026)
+        for quarter in ['Q1', 'Q2', 'Q3', 'Q4']:  # Iterate over all quarters
+            predicted_percentage_2024 = predict_trend(combined_pub_data, 2024, quarter)  # Predict based on 2024 data
+            predicted_percentage_2025 = predict_trend(combined_pub_data, 2025, quarter)  # Predict based on 2025 data
+            predicted_percentage_2026 = predict_trend(combined_pub_data, 2026, quarter)  # Predict based on 2026 data
+
+            # Add dashed line prediction from 2024 to 2026
+            fig.add_trace(go.Scatter(x=[2024, 2025, 2026], 
+                                     y=[predicted_percentage_2024, predicted_percentage_2025, predicted_percentage_2026], 
+                                     mode='lines+text',  # Adding text labels
+                                     name=f'Predicted Trend {quarter}', 
+                                     line=dict(dash='dash'),
+                                     text=[f'{predicted_percentage_2024:.2f}%', 
+                                           f'{predicted_percentage_2025:.2f}%', 
+                                           f'{predicted_percentage_2026:.2f}%'],  # Text labels with percentages
+                                     textposition="top center"))  # Position of the text labels
+        
+        # Show the chart in column 2
+        st.plotly_chart(fig)
