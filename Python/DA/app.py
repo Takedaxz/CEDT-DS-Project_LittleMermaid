@@ -10,10 +10,12 @@ from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 import nltk
 import os
+from wordcloud import WordCloud
+import matplotlib.pyplot as plt
 
 # Ensure necessary NLTK downloads
 nltk.download('stopwords')
-nltk.download('punkt_tab')
+nltk.download('punkt')
 
 # Preprocessing setup
 stop_words = set(stopwords.words('english'))
@@ -31,30 +33,11 @@ def preprocess_text(text):
     tokens = [word for word in tokens if word not in stop_words]
     return ' '.join(tokens)
 
-# Load the data
-@st.cache_data
-def load_data(year):
-    data_path = f'/Users/ppaamm/Desktop/little mermaid_data/CEDT-DS-Project_LittleMermaid/Kafka/output_csv/{year}.csv'
-    df = pd.read_csv(data_path)
-    df['Abstract'] = df['Abstract'].fillna('')
-    df['Processed_Abstract'] = df['Abstract'].apply(preprocess_text)
-    return df
-
-# Initialize TF-IDF Vectorizer
-@st.cache_resource
-def vectorize_data(df):
-    df['Abstract'] = df['Abstract'].fillna('')
-    df['Title'] = df['Title'].fillna('')
-    vectorizer = TfidfVectorizer()
-    combined_vectors = vectorizer.fit_transform(df['Abstract'] + " " + df['Title'])
-    return vectorizer, combined_vectors
-
-
 # Base directory setup relative to this script
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # Current directory of the script
 PROJECT_DIR = os.path.join(BASE_DIR, "..", "..")  # Adjust path to two levels above
-KAFKA_DIR = os.path.join(PROJECT_DIR, "Kafka", "output_csv")
-KEYWORD_DIR = os.path.join(BASE_DIR, "VisualizeData")
+KAFKA_DIR = os.path.join(PROJECT_DIR, "Kafka", "output_csv")  # Path for publications
+KEYWORD_DIR = os.path.join(BASE_DIR, "VisualizeData")  # Path for keywords data
 
 # File paths for publications and keywords
 pub_file_names = [
@@ -74,6 +57,30 @@ def validate_files(file_paths):
 # Validate files for publications and keywords
 validate_files(pub_file_names)
 validate_files(keyword_file_names)
+
+# Load the data
+@st.cache_data
+def load_data(year):
+    """
+    Load data for the specified year from the dynamically constructed path.
+    """
+    data_path = os.path.join(KAFKA_DIR, f"{year}.csv")  # Use the correct dynamic path
+    if not os.path.exists(data_path):
+        st.error(f"File for year {year} not found: {data_path}")
+        st.stop() 
+    df = pd.read_csv(data_path)
+    df['Abstract'] = df['Abstract'].fillna('')
+    df['Processed_Abstract'] = df['Abstract'].apply(preprocess_text)
+    return df
+
+# Initialize TF-IDF Vectorizer
+@st.cache_resource
+def vectorize_data(df):
+    df['Abstract'] = df['Abstract'].fillna('')
+    df['Title'] = df['Title'].fillna('')
+    vectorizer = TfidfVectorizer()
+    combined_vectors = vectorizer.fit_transform(df['Abstract'] + " " + df['Title'])
+    return vectorizer, combined_vectors
 
 # Set Streamlit page configuration
 st.set_page_config(
@@ -181,45 +188,96 @@ if "📅 Publications Analysis" in selected_analyses:
             st.subheader("📊 Summary")
             st.write(f"- **Total Publications Analyzed**: {counts.sum()}")
             st.write(f"- **Highest Interval**: {counts.idxmax()} ({counts.max()} publications)")
-
+# Keywords Analysis
 if "🏷️ Keywords Analysis" in selected_analyses:
     with st.sidebar:
         st.subheader("🏷️ Keywords Filters")
+        show_wordcloud = st.checkbox("Display WordCloud", value=True)
         selected_years = st.multiselect(
             "Select Years", 
             options=combined_keyword_data['Year'].unique(), 
             default=combined_keyword_data['Year'].unique()
         )
-        chart_type = st.radio("Select Chart Type", ["Bar Chart", "Pie Chart"], key="keyword_chart")
+        chart_type = st.radio("Select Chart Type", ["Bar Chart", "Scatter Chart", "Pie Chart (Select Single Year)"], key="keyword_chart")
+        
 
     st.subheader("Keywords Analysis")
+    
     if selected_years:
         filtered_keywords = combined_keyword_data[combined_keyword_data['Year'].isin(selected_years)]
-        aggregated_keywords = filtered_keywords.groupby('Keywords')['Count'].sum().reset_index()
-        aggregated_keywords = aggregated_keywords.sort_values('Count', ascending=False).head(10)
-
-        if chart_type == "Bar Chart":
-            fig = px.bar(
-                aggregated_keywords, 
-                x='Keywords', 
-                y='Count', 
-                title="Top Keywords",
-                labels={'Keywords': 'Keywords', 'Count': 'Total Count'}
-            )
-        elif chart_type == "Pie Chart":
-            fig = px.pie(
-                aggregated_keywords, 
-                names='Keywords', 
-                values='Count', 
-                title="Top Keywords"
-            )
-
-        st.plotly_chart(fig, use_container_width=True)
+        
+        # Create a DataFrame for Top 5 Keywords for each year
+        top5_keywords = filtered_keywords.groupby(['Year', 'Keywords']).sum().reset_index()
+        top5_keywords = top5_keywords.sort_values(['Year', 'Count'], ascending=[True, False]).groupby('Year').head(5)
 
         # Summary for Keywords
         st.subheader("📊 Summary")
-        st.write(f"- **Total Keywords Analyzed**: {len(filtered_keywords['Keywords'].unique())}")
-        st.write(f"- **Top Keyword**: {aggregated_keywords.iloc[0]['Keywords']} ({aggregated_keywords.iloc[0]['Count']} mentions)")
+        
+        # หาคำที่ใช้มากที่สุดในทุกปี
+        overall_top_keywords = filtered_keywords.groupby('Keywords')['Count'].sum().reset_index()
+        overall_top_keywords = overall_top_keywords.sort_values(by='Count', ascending=False).head(1)
+
+        total_keywords = len(filtered_keywords['Keywords'].unique())
+        top_keyword = overall_top_keywords['Keywords'].values[0] if not overall_top_keywords.empty else "N/A"
+        top_keyword_count = overall_top_keywords['Count'].values[0] if not overall_top_keywords.empty else 0
+        
+        st.write(f"- **Total Keywords Analyzed**: {total_keywords}")
+        st.write(f"- **Top Keyword**: {top_keyword} ({top_keyword_count} mentions)")
+
+        if show_wordcloud:
+            st.subheader("WordCloud of Keywords")
+            keyword_freq = dict(zip(filtered_keywords['Keywords'], filtered_keywords['Count']))
+            wordcloud = WordCloud(
+                width=800, height=400, background_color="white", colormap="viridis"
+            ).generate_from_frequencies(keyword_freq)
+
+            fig, ax = plt.subplots(figsize=(10, 5))
+            ax.imshow(wordcloud, interpolation='bilinear')
+            ax.axis("off")
+            st.pyplot(fig)
+
+        if chart_type == "Bar Chart":
+            fig = px.bar(
+                top5_keywords, 
+                x='Keywords', 
+                y='Count', 
+                color='Year',
+                title="Top 5 Keywords by Year",
+                labels={'Keywords': 'Keywords', 'Count': 'Total Count'},
+                text='Count',
+                barmode='group'
+            )
+        elif chart_type == "Scatter Chart":
+            # Create a scatter chart showing counts of top keywords across selected years
+            fig = px.scatter(
+                top5_keywords,
+                x='Keywords',
+                y='Count',
+                color='Year',
+                title="Top 5 Keywords Count by Year",
+                labels={'Keywords': 'Keywords', 'Count': 'Total Count'},
+                size='Count',  # Set size of markers based on Count
+                size_max=20,
+                hover_name='Keywords'
+            )
+        elif chart_type == "Pie Chart (Select Single Year)":
+            if len(selected_years) == 1:
+                selected_year = selected_years[0]
+                pie_data = filtered_keywords[filtered_keywords['Year'] == selected_year]
+
+                # Find Top 5 Keywords
+                top5_keywords_pie = pie_data.nlargest(5, 'Count')
+
+                fig = px.pie(
+                    top5_keywords_pie, 
+                    names='Keywords', 
+                    values='Count', 
+                    title=f"Top 5 Keywords in {selected_year}"
+                )
+            else:
+                st.warning("Please select a single year to view the Pie Chart.")
+
+        st.plotly_chart(fig, use_container_width=True)
     else:
         st.warning("Please select at least one year.")
 
