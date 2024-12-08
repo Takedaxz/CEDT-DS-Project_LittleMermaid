@@ -150,4 +150,5 @@ available
 size
 real
 today
+thailand
 
