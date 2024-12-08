@@ -6,6 +6,7 @@ import plotly.graph_objects as go
 # Load CSV file
 file_path = '/Users/ppaamm/Desktop/little mermaid_data/CEDT-DS-Project_LittleMermaid/ExtractedData/2018.csv'
 
+
 # Check if the file exists
 if not os.path.exists(file_path):
     st.error("File not found! Please check the file path.")

@@ -8,6 +8,31 @@ import networkx as nx
 from wordcloud import WordCloud
 import matplotlib.pyplot as plt
 
+# Base directory setup relative to this script
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # Current directory of the script
+PROJECT_DIR = os.path.join(BASE_DIR, "..", "..")  # Adjust path to two levels above
+KAFKA_DIR = os.path.join(PROJECT_DIR, "Kafka", "output_csv")
+KEYWORD_DIR = os.path.join(BASE_DIR, "VisualizeData")
+
+# File paths for publications and keywords
+pub_file_names = [
+    os.path.join(KAFKA_DIR, f"{year}.csv") for year in range(2018, 2024)
+]
+keyword_file_names = [
+    os.path.join(KEYWORD_DIR, f"{year}_keywords_counts.csv") for year in range(2018, 2024)
+]
+
+# Validate directories and file existence
+def validate_files(file_paths):
+    missing_files = [file for file in file_paths if not os.path.exists(file)]
+    if missing_files:
+        st.error(f"Missing files: {', '.join(missing_files)}")
+        st.stop()
+
+# Validate files for publications and keywords
+validate_files(pub_file_names)
+validate_files(keyword_file_names)
+
 # Set Streamlit page configuration
 st.set_page_config(
     page_title="Research Analysis Dashboard",
@@ -21,17 +46,6 @@ st.markdown("""
 Explore **Co-authorship Networks**, **Research Publications**, **Top Keywords**, and **Institution Analysis** in one unified dashboard. 
 Choose intervals, years, and chart types to visualize trends effectively.
 """)
-
-# File paths
-pub_file_names = [
-    f"/Users/ppaamm/Desktop/little mermaid_data/CEDT-DS-Project_LittleMermaid/ExtractedData/{year}.csv"
-    for year in range(2018, 2024)
-]
-
-keyword_file_names = [
-    f"/Users/ppaamm/Desktop/little mermaid_data/CEDT-DS-Project_LittleMermaid/ExtractedData/{year}_keywords_counts.csv"
-    for year in range(2018, 2024)
-]
 
 # Function to process co-authorship data
 def process_data(file_path, top_nodes):
@@ -166,7 +180,6 @@ if "🏷️ Keywords Analysis" in selected_analyses:
         st.write(f"- **Top Keyword**: {aggregated_keywords.iloc[0]['Keywords']} ({aggregated_keywords.iloc[0]['Count']} mentions)")
     else:
         st.warning("Please select at least one year.")
-
 # Co-authorship Network
 if "🔗 Co-authorship Network" in selected_analyses:
     with st.sidebar:
@@ -175,53 +188,59 @@ if "🔗 Co-authorship Network" in selected_analyses:
         top_nodes = st.slider("Number of Top Authors to Display (Nodes):", min_value=5, max_value=30, value=10)
 
     st.subheader("Co-authorship Network")
-    file_path = f"/Users/ppaamm/Desktop/little mermaid_data/CEDT-DS-Project_LittleMermaid/ExtractedData/{year}.csv"
+    
+    # Dynamically construct file path
+    file_path = os.path.join(KAFKA_DIR, f"{year}.csv")
+    
     if st.button("Generate Network"):
-        try:
-            H = process_data(file_path, top_nodes)
-            pos = nx.spring_layout(H, k=1, iterations=100)
+        if os.path.exists(file_path):  # Check if the file exists
+            try:
+                H = process_data(file_path, top_nodes)
+                pos = nx.spring_layout(H, k=1, iterations=100)
 
-            edge_x, edge_y = [], []
-            for edge in H.edges(data=True):
-                x0, y0 = pos[edge[0]]
-                x1, y1 = pos[edge[1]]
-                edge_x.extend([x0, x1, None])
-                edge_y.extend([y0, y1, None])
+                edge_x, edge_y = [], []
+                for edge in H.edges(data=True):
+                    x0, y0 = pos[edge[0]]
+                    x1, y1 = pos[edge[1]]
+                    edge_x.extend([x0, x1, None])
+                    edge_y.extend([y0, y1, None])
 
-            node_x, node_y, node_labels = [], [], []
-            for node in H.nodes():
-                x, y = pos[node]
-                node_x.append(x)
-                node_y.append(y)
-                node_labels.append(node)
+                node_x, node_y, node_labels = [], [], []
+                for node in H.nodes():
+                    x, y = pos[node]
+                    node_x.append(x)
+                    node_y.append(y)
+                    node_labels.append(node)
 
-            fig = go.Figure()
+                fig = go.Figure()
 
-            fig.add_trace(go.Scatter(
-                x=edge_x,
-                y=edge_y,
-                mode='lines',
-                line=dict(color='gray', width=0.5),
-                hoverinfo='none'
-            ))
+                fig.add_trace(go.Scatter(
+                    x=edge_x,
+                    y=edge_y,
+                    mode='lines',
+                    line=dict(color='gray', width=0.5),
+                    hoverinfo='none'
+                ))
 
-            fig.add_trace(go.Scatter(
-                x=node_x,
-                y=node_y,
-                mode='markers+text',
-                marker=dict(size=10, color='lightblue', line_width=1),
-                text=node_labels,
-                textposition="top center",
-                hoverinfo='text'
-            ))
+                fig.add_trace(go.Scatter(
+                    x=node_x,
+                    y=node_y,
+                    mode='markers+text',
+                    marker=dict(size=10, color='lightblue', line_width=1),
+                    text=node_labels,
+                    textposition="top center",
+                    hoverinfo='text'
+                ))
 
-            fig.update_layout(
-                title=f"Co-authorship Network for {year}",
-                title_x=0.5,
-                showlegend=False,
-                xaxis=dict(showgrid=False, zeroline=False),
-                yaxis=dict(showgrid=False, zeroline=False)
-            )
-            st.plotly_chart(fig)
-        except Exception as e:
-            st.error(f"Error generating network: {e}")
+                fig.update_layout(
+                    title=f"Co-authorship Network for {year}",
+                    title_x=0.5,
+                    showlegend=False,
+                    xaxis=dict(showgrid=False, zeroline=False),
+                    yaxis=dict(showgrid=False, zeroline=False)
+                )
+                st.plotly_chart(fig)
+            except Exception as e:
+                st.error(f"Error generating network: {e}")
+        else:
+            st.error(f"File not found: {file_path}. Please ensure the file exists.")
