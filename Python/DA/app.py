@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 # Ensure necessary NLTK downloads
 nltk.download('stopwords')
 nltk.download('punkt')
+nltk.download('punkt_tab')
 
 # Preprocessing setup
 stop_words = set(stopwords.words('english'))
