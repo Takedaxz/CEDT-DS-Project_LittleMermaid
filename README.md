@@ -1,4 +1,4 @@
-# Little-Mermaid-DS-Project
+# CEDT-DS-Project_LittleMermaid
 
 ## Project Objectives
 This project aims to analyze engineering research data to identify key trends, collaboration patterns, and emerging topics while presenting actionable insights through a comprehensive and visually engaging pipeline.
