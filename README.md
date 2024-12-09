@@ -66,19 +66,6 @@ This project aims to analyze engineering research data to identify key trends, c
   - Trend identification
   - Research landscape mapping
 
-## Key Findings
-
-1. **Publication Patterns**
-   - Highest publication frequency observed in Q1 of each year
-   - Journals remain the predominant publication type
-
-2. **Top Keywords (Past Decade)**
-   - COVID-19
-   - Machine Learning
-   - Artificial Intelligence
-   - Educational Innovation
-   - Higher Education
-
 3. **Emerging Topics (2024)**
    - AI and ML applications in industry
    - Sustainability
