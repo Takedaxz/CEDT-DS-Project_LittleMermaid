@@ -65,8 +65,8 @@ This project aims to analyze engineering research data to identify key trends, c
   - Temporal keyword comparison
   - Trend identification
   - Research landscape mapping
-
-3. **Emerging Topics (2024)**
+    
+- **Emerging Topics (2024)**
    - AI and ML applications in industry
    - Sustainability
    - Environmental concerns
